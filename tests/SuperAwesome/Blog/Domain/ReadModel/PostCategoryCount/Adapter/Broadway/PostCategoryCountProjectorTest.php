@@ -64,4 +64,19 @@ class PostCategoryCountProjectorTest extends ProjectorScenarioTestCase
             ])
         ;
     }
+    /** @test */
+    public function it_sums_correctly_with_different_ids()
+    {
+        $this->scenario
+            ->given([
+                new PostWasCategorized('my-id', 'drafts'),
+                new PostWasCategorized('foo', 'drafts'),
+                new PostWasCategorized('my-id', 'drafts'),
+            ])
+            ->when(new PostWasCategorized('my-id', 'drafts'))
+            ->then([
+                new PostCategoryCount('drafts', 4),
+            ])
+        ;
+    }
 }

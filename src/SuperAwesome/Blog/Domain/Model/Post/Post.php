@@ -2,10 +2,15 @@
 
 namespace SuperAwesome\Blog\Domain\Model\Post;
 
+use Broadway\EventSourcing\EventSourcedAggregateRoot;
 use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasCategorized;
+use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasCreated;
 use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasPublished;
+use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasTagged;
+use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasUncategorized;
+use SuperAwesome\Blog\Domain\Model\Post\Event\PostWasUntagged;
 
-class Post
+class Post extends EventSourcedAggregateRoot
 {
     /** @var string */
     private $id;
@@ -25,12 +30,24 @@ class Post
     /** @var string */
     private $status;
 
-    /**
-     * @param string $id
-     */
-    public function __construct($id)
+    private function __construct()
+    {}
+
+    public static function create($id)
     {
-        $this->id = $id;
+        $instance = new static();
+        $instance->apply(new PostWasCreated($id));
+        return $instance;
+    }
+
+    public static function instantiateForReconstitution()
+    {
+        return new static();
+    }
+
+    protected function applyPostWasCreated(PostWasCreated $event)
+    {
+        $this->id = $event->id;
     }
 
     /**
@@ -82,9 +99,49 @@ class Post
      */
     public function publish($title, $content, $category)
     {
-        $this->title = $title;
-        $this->content = $content;
-        $this->category = $category;
+        if ( $title == $this->title && $content == $this->content && $category == $this->category)
+        {
+            return;
+        }
+
+        if ( $this->category && $category != $this->category )
+        {
+            $this->apply(
+                new PostWasUncategorized(
+                    $this->id,
+                    $category
+                )
+            );
+        }
+
+        if ( $this->category != $category )
+        {
+            $this->apply(new PostWasCategorized(
+                $this->id,
+                $category
+            ));
+        }
+
+        $this->apply(
+            new PostWasPublished(
+                $this->id,
+                $title,
+                $content,
+                $category
+            )
+        );
+    }
+
+    protected function applyPostWasUntagged(PostWasUntagged $event)
+    {
+        unset($this->tags[$event->tag]);
+    }
+
+    protected function applyPostWasPublished(PostWasPublished $event)
+    {
+        $this->title = $event->title;
+        $this->content = $event->content;
+        $this->category = $event->category;
     }
 
     /**
@@ -94,7 +151,16 @@ class Post
      */
     public function addTag($tag)
     {
-        $this->tags[$tag] = true;
+        if (isset($this->tags[$tag])) {
+            return;
+        }
+
+        $this->apply(new PostWasTagged($this->id, $tag));
+    }
+
+    protected function applyPostWasTagged(PostWasTagged $event)
+    {
+        $this->tags[$event->tag] = true;
     }
 
     /**
@@ -104,8 +170,22 @@ class Post
      */
     public function removeTag($tag)
     {
-        if (isset($this->tags[$tag])) {
-            unset($this->tags[$tag]);
+        if (!isset($this->tags[$tag])) {
+            return;
         }
+
+        $this->apply(
+            new PostWasUntagged(
+                $this->id, $tag
+            )
+        );
+    }
+
+    /**
+     * @return string
+     */
+    public function getAggregateRootId()
+    {
+        return (string) $this->id;
     }
 }

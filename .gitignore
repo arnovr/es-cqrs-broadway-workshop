@@ -3,3 +3,5 @@
 /app/logs/
 /vendor/
 /.env
+.idea
+.idea/
